@@ -3,7 +3,7 @@ package methods
 import (
 	"encoding/json"
 
-	"github.com/hilaoyu/go-softether-api/pkg"
+	"github.com/hilaoyu/softether-api-client-go/pkg"
 )
 
 type SetSecureNATOption struct {

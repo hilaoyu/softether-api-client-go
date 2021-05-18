@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/hilaoyu/go-softether-api/pkg"
+	"github.com/hilaoyu/softether-api-client-go/pkg"
 )
 
 type EnumDHCP struct {
