@@ -61,7 +61,7 @@ func (api *Api) Call(method pkg.Method) (map[string]interface{}, error) {
 	api.id.Incl()
 	method.SetId(api.id.Describe())
 	body, err := method.Marshall()
-	fmt.Println(string(body))
+	//fmt.Println(string(body))
 	if err != nil {
 		return nil, fmt.Errorf("[error] failed to marshall request: %v", err)
 	}
@@ -96,7 +96,7 @@ func validateResponse(res *http.Response) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("[error] failed to read: %v", err)
 	}
-	fmt.Println(string(body))
+	//fmt.Println(string(body))
 	b := make(map[string]interface{})
 	err = json.Unmarshal(body, &b)
 	if err != nil {
