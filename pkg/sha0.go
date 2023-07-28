@@ -29,8 +29,8 @@ void MY_SHA0_Transform(MY_SHA0_CTX* ctx) {
 		W[t] = tmp;
 	}
 	for(; t < 80; t++) {
-		//W[t] = rol(1,W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16]);
-		W[t] = (1,W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16]);
+		W[t] = rol(1,W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16]);
+		//W[t] = (1,W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16]);
 	}
 	A = ctx->state[0];
 	B = ctx->state[1];
