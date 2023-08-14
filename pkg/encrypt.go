@@ -1,5 +1,6 @@
 package pkg
 
+import "C"
 import (
 	"golang.org/x/crypto/md4"
 	"strings"

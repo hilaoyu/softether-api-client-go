@@ -109,6 +109,7 @@ const UCHAR* MY_SHA0_hash(const void* data, int len, UCHAR* digest) {
 	return digest;
 }
 */
+
 import "C"
 import (
 	"unsafe"
@@ -118,12 +119,6 @@ type SHA0 struct {
 	ctx *C.MY_SHA0_CTX
 }
 
-func NewSha0Hash() SHA0 {
-	var ctx C.MY_SHA0_CTX
-	h := SHA0{ctx: &ctx}
-	C.MY_SHA0_init(h.ctx)
-	return h
-}
 func (s *SHA0) Write(p []byte) (n int) {
 	n = len(p)
 	if n == 0 {
@@ -138,4 +133,11 @@ func (s *SHA0) Sum() []byte {
 }
 func (s *SHA0) Reset() {
 	C.MY_SHA0_init(s.ctx)
+}
+
+func NewSha0Hash() SHA0 {
+	var ctx C.MY_SHA0_CTX
+	h := SHA0{ctx: &ctx}
+	C.MY_SHA0_init(h.ctx)
+	return h
 }
