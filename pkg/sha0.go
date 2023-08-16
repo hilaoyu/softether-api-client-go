@@ -109,7 +109,6 @@ const UCHAR* MY_SHA0_hash(const void* data, int len, UCHAR* digest) {
 	return digest;
 }
 */
-
 import "C"
 import (
 	"unsafe"
