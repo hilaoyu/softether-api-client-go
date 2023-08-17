@@ -1,7 +1,10 @@
 package pkg
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -77,4 +80,26 @@ func ValidateType(typ string, val interface{}) bool {
 	default:
 		return false
 	}
+}
+
+func BinToStr(data string) (str string, err error) {
+	binData := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
+	_, err = base64.StdEncoding.Decode(binData, []byte(data))
+
+	if nil != err {
+		return
+	}
+
+	str = fmt.Sprintf("%x", binData)
+
+	return
+}
+
+func FormatMacAddress(str string) string {
+	str = strings.ReplaceAll(str, "-", "")
+	str = strings.ReplaceAll(str, ":", "")
+	str = strings.ReplaceAll(str, " ", "")
+	reg := regexp.MustCompile("^(.{2})(.{2})(.{2})(.{2})(.{2})(.{2})(.*)$")
+	str = reg.ReplaceAllString(str, "$1:$2:$3:$4:$5:$6")
+	return strings.ToUpper(str)
 }
