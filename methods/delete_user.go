@@ -18,7 +18,7 @@ func (g *DeleteUser) Parameter() pkg.Params {
 func NewDeleteUser(hub, name string) *DeleteUser {
 	return &DeleteUser{
 		Base:   pkg.NewBase("DeleteUser"),
-		Params: newDeleteUserParmas(hub, name),
+		Params: newDeleteUserParams(hub, name),
 	}
 }
 
@@ -48,7 +48,7 @@ type DeleteUserParams struct {
 	Name    string `json:"Name_str"`
 }
 
-func newDeleteUserParmas(hub, name string) *DeleteUserParams {
+func newDeleteUserParams(hub, name string) *DeleteUserParams {
 	return &DeleteUserParams{
 		HubName: hub,
 		Name:    name,

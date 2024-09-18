@@ -1,13 +1,12 @@
 package softetherapi
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/hilaoyu/go-utils/utilHttp"
+	"github.com/hilaoyu/go-utils/utilTime"
 	"github.com/hilaoyu/softether-api-client-go/methods"
 	"github.com/hilaoyu/softether-api-client-go/pkg"
-	"io/ioutil"
-	"net/http"
+	"github.com/hilaoyu/softether-api-client-go/response"
 	"strconv"
 	"time"
 )
@@ -58,47 +57,43 @@ func (api *Api) UseProxySocks5(proxyAddr string, proxyUser string, proxyPassword
 	return api
 }
 
-func (api *Api) Call(method pkg.Method) (map[string]interface{}, error) {
+func (api *Api) Call(method pkg.Method, v interface{}) (err error) {
 	api.id.Incl()
 	method.SetId(api.id.Describe())
 	body, err := method.Marshall()
 	//fmt.Println(string(body))
 	if err != nil {
-		return nil, fmt.Errorf("[error] failed to marshall request: %v", err)
+		err = fmt.Errorf("[error] failed to marshall request: %v", err)
+		return
 	}
 
-	res, err := api.HttpClient.WithRawBody(string(body)).Request("POST", "", map[string]string{
+	result := &response.ResResult{
+		Result: v,
+	}
+
+	err = api.HttpClient.WithRawBody(string(body)).RequestJson(result, "POST", "", map[string]string{
 		"Content-Type":        "application/json",
 		"X-VPNADMIN-HUBNAME":  api.Hub,
 		"X-VPNADMIN-PASSWORD": api.Password,
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("[error] failed to call: %v", err)
+		err = fmt.Errorf("[error] failed to call: %v", err)
+		return
 	}
-	return validateResponse(res)
+	v = result.Result
+	return
 }
 
-func validateResponse(res *http.Response) (map[string]interface{}, error) {
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("[error] failed to read: %v", err)
+func (api *Api) ServerInfo() (info *response.ResServerInfo, err error) {
+	info = &response.ResServerInfo{}
+	err = api.Call(methods.NewGetServerInfo(), info)
+	if nil != err {
+		return
 	}
-	//fmt.Println(string(body))
-	b := make(map[string]interface{})
-	err = json.Unmarshal(body, &b)
-	if err != nil {
-		return nil, err
+	if "" == info.KernelNameStr {
+		info = nil
 	}
-	if _, ok := b["result"]; ok {
-		return b["result"].(map[string]interface{}), nil
-	}
-	return nil, fmt.Errorf("%v", b["error"])
-}
-
-func (api *Api) ServerInfo() (info map[string]interface{}, err error) {
-	info, err = api.Call(methods.NewTest())
 	return
 }
 
@@ -108,33 +103,39 @@ func (api *Api) HubCreate(hubName string, password string, natOption *methods.Se
 		return
 	}
 
-	api.Call(methods.NewDeleteHub(hubName))
+	api.Call(methods.NewDeleteHub(hubName), nil)
 
-	_, err = api.Call(methods.NewCreateHub(hubName, password, true))
+	err = api.Call(methods.NewCreateHub(hubName, password, true), nil)
 	if nil != err {
 		err = fmt.Errorf("创建HUB失败, err: %+v", err)
 		return
 	}
 
 	if nil == natOption {
+		err = api.Call(methods.NewDisableSecureNAT(hubName), nil)
+		if nil != err {
+			err = fmt.Errorf("HUB: %s 禁用NAT失败,err: %+v", hubName, err)
+		}
 		return
 	}
-	_, err = api.Call(methods.NewEnableSecureNAT(hubName))
+	err = api.Call(methods.NewEnableSecureNAT(hubName), nil)
 	if nil != err {
 		err = fmt.Errorf("HUB: %s 启用NAT失败,err: %+v", hubName, err)
 		return
 	}
-
-	hubOption, err := api.Call(methods.NewGetSecureNATOption(hubName))
+	hubOption, err := api.HubGetNatOption(hubName)
 	if nil != err {
-		err = fmt.Errorf("HUB: %s 查询 SecureNATOption 失败", hubName)
+		return
 	}
 
-	macBin := ""
-	if macBinI, ok := hubOption["MacAddress_bin"]; ok {
-		macBin = macBinI.(string)
+	if nil == hubOption {
+		err = fmt.Errorf("HUB: %s NAT错误", hubName)
+		return
 	}
-	natOption.MacAddressBin = macBin
+	if "" != hubOption.MacAddressBin {
+		natOption.MacAddressBin = hubOption.MacAddressBin
+	}
+
 	natOption.RpcHubName = hubName
 	if natOption.Mtu <= 0 {
 		natOption.Mtu = 1500
@@ -151,15 +152,75 @@ func (api *Api) HubCreate(hubName string, password string, natOption *methods.Se
 	secureNatOptionMethod := methods.NewSetSecureNATOption(hubName)
 	secureNatOptionMethod.Params = natOption
 
-	_, err = api.Call(secureNatOptionMethod)
+	err = api.Call(secureNatOptionMethod, nil)
 	if nil != err {
 		err = fmt.Errorf("HUB: %s 设置NAT OPTIONS失败,%+v", hubName, err)
 	}
 	return
 }
 
+func (api *Api) HubGetNatOption(hubName string) (hubOption *response.ResSecureNATOption, err error) {
+	hubOption = &response.ResSecureNATOption{}
+	err = api.Call(methods.NewGetSecureNATOption(hubName), hubOption)
+	if nil != err {
+		err = fmt.Errorf("HUB: %s 查询 SecureNATOption 失败", hubName)
+	}
+	if "" == hubOption.RpcHubNameStr {
+		hubOption = nil
+	}
+	return
+}
+func (api *Api) HubSessions(hubName string) (sessions []*response.Session, err error) {
+	hubSessionList := &response.ResHubSessionList{}
+	err = api.Call(methods.NewEnumSession(hubName), hubSessionList)
+	if nil != err {
+		err = fmt.Errorf("HUB: %s 查询 sessions 失败", hubName)
+		return
+	}
+
+	if len(hubSessionList.SessionList) > 0 {
+		var macTables []*response.MacTable
+		macTableList := &response.ResMacTableList{MacTable: &macTables}
+		err = api.Call(methods.NewEnumMacTable(hubName), macTableList)
+		if nil != err {
+			err = fmt.Errorf("HUB: %s 查询 mac table 失败", hubName)
+			return
+		}
+		macTablesMap := map[string]*response.MacTable{}
+		for _, macTable := range macTables {
+			macTablesMap[macTable.SessionNameStr] = macTable
+		}
+
+		for _, hubSession := range hubSessionList.SessionList {
+			if "" == hubSession.NameStr || hubSession.SecureNATModeBool || hubSession.LinkModeBool {
+				continue
+			}
+			macAddress := ""
+			if macT, ok := macTablesMap[hubSession.NameStr]; ok {
+				macAddress, _ = pkg.BinToStr(macT.MacAddressBin)
+				macAddress = pkg.FormatMacAddress(macAddress)
+			}
+			startTime, _ := time.Parse("2006-01-02T15:04:05.000Z", hubSession.CreatedTimeDt)
+			endTime, _ := time.Parse("2006-01-02T15:04:05.000Z", hubSession.LastCommTimeDt)
+			sessions = append(sessions, &response.Session{
+				Account:     hubSession.UsernameStr,
+				SessionName: hubSession.NameStr,
+				ClientIp:    hubSession.ClientIp,
+				ClientMac:   macAddress,
+				StartTime:   utilTime.TimeFormat(startTime),
+				EndTime:     utilTime.TimeFormat(endTime),
+			})
+		}
+	}
+
+	return
+}
+func (api *Api) HubSessionDelete(hubName string, sessionName string) (err error) {
+	err = api.Call(methods.NewDeleteSession(hubName, sessionName), nil)
+	return
+}
 func (api *Api) HubDelete(hubName string) (err error) {
-	_, err = api.Call(methods.NewDeleteHub(hubName))
+	err = api.Call(methods.NewDeleteHub(hubName), nil)
 	return
 }
 
@@ -173,40 +234,48 @@ func (api *Api) HubLinkCreate(hubName string, linkName string, destHost string, 
 	m.Params.Username = account
 	m.Params.PlainPassword = password
 	m.Params.AuthType = 2
-	_, err = api.Call(m)
+	err = api.Call(m, nil)
 	if nil != err {
 		return
 	}
 
 	if onLine {
-		_, err = api.Call(methods.NewSetLinkOnline(hubName, linkName))
+		err = api.Call(methods.NewSetLinkOnline(hubName, linkName), nil)
 	} else {
-		_, err = api.Call(methods.NewSetLinkOffline(hubName, linkName))
+		err = api.Call(methods.NewSetLinkOffline(hubName, linkName), nil)
 	}
 
 	return
 }
 
 func (api *Api) HubLinkDelete(hubName string, linkName string) (err error) {
-	_, err = api.Call(methods.NewDeleteLink(hubName, linkName))
+	err = api.Call(methods.NewDeleteLink(hubName, linkName), nil)
 
 	return
 }
 
-func (api *Api) AccountCreate(hubName string, account string, password string) (err error) {
+func (api *Api) AccountCreate(hubName string, account string, password string) (user *response.ResCreateUser, err error) {
 
 	m := methods.NewCreateUser(hubName, account, account, "", nil, 1)
 	m.Params.Auth_Passoword = password
 
-	_, err = api.Call(m)
+	user = &response.ResCreateUser{}
+	err = api.Call(m, user)
 
+	if nil != err {
+		err = fmt.Errorf("HUB: %s 创建用户 %s 失败,%+v", hubName, account, err)
+	}
+
+	if "" == user.NameStr {
+		user = nil
+	}
 	return
 }
 
 func (api *Api) AccountDelete(hubName string, account string) (err error) {
 
 	m := methods.NewDeleteUser(hubName, account)
-	_, err = api.Call(m)
+	err = api.Call(m, nil)
 	return
 }
 
